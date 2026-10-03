@@ -1,0 +1,10 @@
+{
+  "id": "dataview-to-bases",
+  "name": "Dataview to Bases",
+  "version": "0.1.0",
+  "minAppVersion": "1.10.0",
+  "description": "Convert Dataview queries into Bases blocks, and report which queries in your vault can be converted.",
+  "author": "Siulved54",
+  "authorUrl": "https://github.com/perezamadorluisenrique-gif",
+  "isDesktopOnly": false
+}
