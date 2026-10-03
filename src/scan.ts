@@ -1,6 +1,6 @@
 // Finds Dataview blocks in note text, converts them, and builds the vault report. Pure: no `obsidian` import.
-import { convertQuery } from './convert.ts';
-import type { Conversion } from './convert.ts';
+import { convertQuery, normalizeName } from './convert.ts';
+import type { Conversion, ConvertOptions } from './convert.ts';
 
 export interface Block {
   /** 0-based line of the opening fence. */
@@ -16,6 +16,9 @@ export interface Block {
 
 const OPEN = /^(\s*(?:>\s*)*)(`{3,}|~{3,})\s*([^\s`]*)\s*$/;
 
+const CLOSE = /^(\s*(?:>\s*)*)(`{3,}|~{3,})\s*$/;
+const depth = (prefix: string) => (prefix.match(/>/g) ?? []).length;
+
 function stripPrefix(line: string, prefix: string): string {
   return line.startsWith(prefix) ? line.slice(prefix.length) : line.replace(/^\s*(?:>\s?)*/, '');
 }
@@ -30,8 +33,8 @@ export function findBlocks(text: string): Block[] {
     const lang = langRaw.toLowerCase();
     let end = -1;
     for (let j = i + 1; j < lines.length; j++) {
-      const c = /^\s*(?:>\s*)*(`{3,}|~{3,})\s*$/.exec(lines[j]);
-      if (c && c[1][0] === fence[0] && c[1].length >= fence.length) { end = j; break; }
+      const c = CLOSE.exec(lines[j]);
+      if (c && c[2][0] === fence[0] && c[2].length >= fence.length && depth(c[1]) === depth(prefix)) { end = j; break; }
     }
     if (end < 0) break;
     if (lang === 'dataview' || lang === 'dataviewjs') {
@@ -57,8 +60,8 @@ export function countInline(text: string): number {
     const m = OPEN.exec(lines[i]);
     if (!m) continue;
     for (let j = i + 1; j < lines.length; j++) {
-      const c = /^\s*(?:>\s*)*(`{3,}|~{3,})\s*$/.exec(lines[j]);
-      if (c && c[1][0] === m[2][0] && c[1].length >= m[2].length) { blocks.push([i, j]); i = j; break; }
+      const c = CLOSE.exec(lines[j]);
+      if (c && c[2][0] === m[2][0] && c[2].length >= m[2].length && depth(c[1]) === depth(m[1])) { blocks.push([i, j]); i = j; break; }
     }
   }
   let n = 0;
@@ -69,11 +72,11 @@ export function countInline(text: string): number {
   return n;
 }
 
-export function convertBlock(block: Block): Conversion {
+export function convertBlock(block: Block, opts?: ConvertOptions): Conversion {
   if (block.lang === 'dataviewjs') {
     return { type: 'DATAVIEWJS', status: 'none', reasons: ['dataviewjs blocks run JavaScript, which Bases cannot express'], warnings: [] };
   }
-  return convertQuery(block.body);
+  return convertQuery(block.body, opts);
 }
 
 /** The replacement lines for a converted block. */
@@ -94,11 +97,11 @@ export interface Edit {
   lines?: string[];
 }
 
-export function planEdits(text: string, keepOriginal: boolean, only?: (b: Block) => boolean): Edit[] {
+export function planEdits(text: string, keepOriginal: boolean, only?: (b: Block) => boolean, opts?: ConvertOptions): Edit[] {
   return findBlocks(text)
     .filter((b) => (only ? only(b) : true))
     .map((block) => {
-      const conversion = convertBlock(block);
+      const conversion = convertBlock(block, opts);
       return { block, conversion, lines: conversion.status === 'none' ? undefined : renderBlock(block, conversion, keepOriginal) };
     });
 }
@@ -109,10 +112,10 @@ export interface FileScan {
   inline: number;
 }
 
-export function scanText(path: string, text: string): FileScan | undefined {
+export function scanText(path: string, text: string, opts?: ConvertOptions): FileScan | undefined {
   if (!/dataview|`\$?=/i.test(text)) return undefined;
   const entries = findBlocks(text).map((b) => {
-    const c = convertBlock(b);
+    const c = convertBlock(b, opts);
     return { line: b.start + 1, type: c.type, status: c.status, notes: c.status === 'none' ? c.reasons : c.warnings };
   });
   const inline = countInline(text);
@@ -146,4 +149,31 @@ export function buildReport(scans: FileScan[], filesChecked: number, date: strin
     if (s.inline) out.push(`| [[${s.path}]] | | inline | not convertible | ${s.inline} inline \`=\` ${s.inline === 1 ? 'query' : 'queries'} |`);
   }
   return out.concat('').join('\n');
+}
+
+const INLINE_LINE = /^[ \t>]*(?:[-*+]\s+(?:\[.\]\s+)?)?([^\s:[\]()`][^:[\]()`\n]*?)::(?:\s|$)/gm;
+const INLINE_BRACKET = /[[(]([^\s:[\]()`][^:[\]()`\n]*?)::\s/g;
+
+/** Names of Dataview inline fields (`key:: value`, `[key:: value]`, `(key:: value)`) in the text, outside code fences. */
+export function inlineFieldNames(text: string): Set<string> {
+  const names = new Set<string>();
+  const lines = text.split('\n');
+  const skip = new Set<number>();
+  for (let i = 0; i < lines.length; i++) {
+    const m = OPEN.exec(lines[i]);
+    if (!m || skip.has(i)) continue;
+    for (let j = i + 1; j < lines.length; j++) {
+      const c = CLOSE.exec(lines[j]);
+      if (c && c[2][0] === m[2][0] && c[2].length >= m[2].length) {
+        for (let k = i; k <= j; k++) skip.add(k);
+        break;
+      }
+    }
+  }
+  const body = lines.map((l, i) => (skip.has(i) ? '' : l)).join('\n');
+  for (const re of [INLINE_LINE, INLINE_BRACKET]) {
+    re.lastIndex = 0;
+    for (let m = re.exec(body); m; m = re.exec(body)) names.add(normalizeName(m[1]));
+  }
+  return names;
 }

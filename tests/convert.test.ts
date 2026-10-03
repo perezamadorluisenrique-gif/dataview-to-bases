@@ -96,7 +96,7 @@ test('FROM with links, folders, files, or/and nesting', () => {
 
 test('functions map to Bases methods', () => {
   const y = yaml('TABLE default(status, "none") AS S, length(file.outlinks) AS L, lower(title) AS T, choice(done, "y", "n") AS C FROM #x WHERE icontains(title, "a") AND !done');
-  assert.match(y, /if\(note\.status, note\.status, "none"\)/);
+  assert.match(y, /if\(note\.status == null, "none", note\.status\)/);
   assert.match(y, /file\.links\.length/);
   assert.match(y, /note\.title\.lower\(\)/);
   assert.match(y, /if\(note\.done, "y", "n"\)/);
@@ -112,9 +112,46 @@ test('dates: today, now, durations, dateformat', () => {
   assert.equal(luxonToMoment('ZZZ'), undefined);
 });
 
-test('comparison with null becomes a truthiness test', () => {
-  assert.match(yaml('LIST FROM #x WHERE status = null'), /!note\.status\.isTruthy\(\)/);
-  assert.match(yaml('LIST FROM #x WHERE status != null'), /note\.status\.isTruthy\(\)/);
+test('comparison with null stays a comparison with null (0, false and "" are values)', () => {
+  assert.match(yaml('LIST FROM #x WHERE status = null'), /'note\.status == null'/);
+  assert.match(yaml('LIST FROM #x WHERE status != null'), /'note\.status != null'/);
+  assert.doesNotMatch(yaml('LIST FROM #x WHERE status = null'), /isTruthy/);
+});
+
+test('default() only replaces a missing value', () => {
+  assert.match(yaml('TABLE default(rating, "unrated") FROM #x'), /c1: 'if\(note\.rating == null, "unrated", note\.rating\)'/);
+});
+
+test('contains() on a note property warns about list matching; on file.tags it does not', () => {
+  const c = convertQuery('LIST FROM #x WHERE contains(authors, "Smith")');
+  assert.equal(c.status, 'partly');
+  assert.match(c.warnings.join(' '), /whole items/);
+  assert.equal(convertQuery('LIST FROM #x WHERE contains(file.tags, "#a")').status, 'full');
+  assert.equal(convertQuery('LIST FROM #x WHERE econtains(authors, "Smith")').status, 'full');
+});
+
+test('fields that exist only as inline fields in the vault are flagged', () => {
+  const c = convertQuery('TABLE status FROM #x WHERE due > date(today)', { inlineFields: new Set(['status']) });
+  assert.equal(c.status, 'partly');
+  assert.match(c.warnings.join(' '), /"status" is an inline field/);
+  assert.equal(convertQuery('TABLE status FROM #x', { inlineFields: new Set(['other']) }).status, 'full');
+  assert.equal(convertQuery('TABLE Due-Date FROM #x', { inlineFields: new Set(['due-date']) }).status, 'partly');
+});
+
+test('property names with a hyphen warn about exact spelling', () => {
+  const c = convertQuery('TABLE due-date FROM #x');
+  assert.equal(c.status, 'partly');
+  assert.match(c.warnings.join(' '), /exactly as written/);
+});
+
+test('LIMIT before SORT or WHERE warns about clause order', () => {
+  assert.equal(convertQuery('LIST FROM #x LIMIT 5 SORT file.name').status, 'partly');
+  assert.equal(convertQuery('LIST FROM #x LIMIT 5 WHERE a').status, 'partly');
+  assert.equal(convertQuery('LIST FROM #x SORT file.name LIMIT 5').status, 'full');
+});
+
+test('names may continue with digits after a hyphen', () => {
+  assert.deepEqual(tokenize('due-2024 > 1').map((t) => t.v), ['due-2024', '>', '1', '']);
 });
 
 test('operator precedence keeps needed parentheses only', () => {

@@ -1,7 +1,7 @@
 import { Notice, Plugin, PluginSettingTab, Setting, TFile } from 'obsidian';
 import type { Editor } from 'obsidian';
 
-import { buildReport, planEdits, scanText } from './src/scan.ts';
+import { buildReport, inlineFieldNames, planEdits, scanText } from './src/scan.ts';
 import type { Edit, FileScan } from './src/scan.ts';
 
 interface Settings {
@@ -24,13 +24,17 @@ export default class DataviewToBases extends Plugin {
       id: 'convert-at-cursor',
       name: 'Convert Dataview query at cursor to Bases',
       icon: 'arrow-right-left',
-      editorCallback: (editor: Editor) => this.convert(editor, true),
+      editorCallback: (editor: Editor) => {
+        void this.convert(editor, true);
+      },
     });
     this.addCommand({
       id: 'convert-all',
       name: 'Convert all Dataview queries in this note',
       icon: 'list-restart',
-      editorCallback: (editor: Editor) => this.convert(editor, false),
+      editorCallback: (editor: Editor) => {
+        void this.convert(editor, false);
+      },
     });
     this.addCommand({
       id: 'scan-vault',
@@ -44,10 +48,23 @@ export default class DataviewToBases extends Plugin {
     this.addSettingTab(new DataviewToBasesSettingTab(this));
   }
 
-  private convert(editor: Editor, atCursor: boolean) {
+  /** Names of inline fields (key:: value) anywhere in the vault, which Bases cannot read. */
+  private async inlineFields(): Promise<Set<string>> {
+    const names = new Set<string>();
+    for (const f of this.app.vault.getMarkdownFiles()) {
+      const text = await this.app.vault.cachedRead(f);
+      if (!text.includes('::')) continue;
+      for (const n of inlineFieldNames(text)) names.add(n);
+    }
+    return names;
+  }
+
+  private async convert(editor: Editor, atCursor: boolean) {
+    const inlineFields = await this.inlineFields();
+    // read the note after the wait, so what is converted is what is on screen
     const text = editor.getValue();
     const cursor = editor.getCursor('from').line;
-    const edits = planEdits(text, this.settings.keepOriginal, atCursor ? (b) => cursor >= b.start && cursor <= b.end : undefined);
+    const edits = planEdits(text, this.settings.keepOriginal, atCursor ? (b) => cursor >= b.start && cursor <= b.end : undefined, { inlineFields });
     if (!edits.length) {
       new Notice(atCursor ? 'The cursor is not inside a Dataview query.' : 'No Dataview queries in this note.');
       return;
@@ -86,9 +103,10 @@ export default class DataviewToBases extends Plugin {
   private async scanVault() {
     const files = this.app.vault.getMarkdownFiles().filter((f) => f.path !== this.settings.reportPath);
     const scans: FileScan[] = [];
+    const inlineFields = await this.inlineFields();
     for (const f of files) {
       const text = await this.app.vault.cachedRead(f);
-      const s = scanText(f.path, text);
+      const s = scanText(f.path, text, { inlineFields });
       if (s) scans.push(s);
     }
     scans.sort((a, b) => a.path.localeCompare(b.path));

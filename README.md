@@ -67,13 +67,16 @@ Left unchanged, with the reason in the notice or the report:
 
 ## Differences you should check
 
-A query is reported as **partly** convertible when the result is not guaranteed to match:
+A query is reported as **partly** convertible when the result may not match Dataview. The notice and the report say which of these applies:
 
+- **Inline fields.** Bases reads only properties in the frontmatter. If a field the query uses is written inline somewhere in your vault (`status:: done`, `[due:: 2026-10-10]`), the query is reported as partly, because the converted table would be empty or wrong for those notes. Move the field into the frontmatter, or keep Dataview for that query.
+- **`contains()` on a property.** On a list property, Dataview also matches part of an item (`contains(authors, "Smi")` finds "Smith"), while Bases matches whole items only. `econtains` converts exactly.
 - **`GROUP BY`.** Dataview shows one row per group; Bases lists every note under its group heading.
 - **`this.field`.** Properties of the current page are mapped to `this.note.field`; check the result.
-- **Property names.** Dataview matches `Due Date` as `due-date`. Bases uses the property name exactly as written; names with a hyphen or a space are converted to a formula that reads the name as written in the query.
-- **Tags.** Dataview lists tags with a `#`; Bases `file.tags` and `file.hasTag("x")` do not need one.
-- **Date formats.** `dateformat()` formats written for Dataview are translated to the common Bases ones; unusual tokens are reported as not convertible.
+- **Property spelling.** Dataview matches `Due Date` as `due-date`. Bases uses the property name exactly as written in the query, so names with a hyphen or a space are reported as partly and converted to a formula that reads the name as written.
+- **Clause order.** Dataview runs `LIMIT` where you wrote it (`LIMIT 10 SORT x` sorts only ten notes); Bases always filters, sorts, then limits.
+
+Translated without a warning: `x = null` stays `x == null` (so `0`, `false` and an empty text are values, as in Dataview), `default(x, y)` only replaces a missing value, `contains(file.tags, "#x")` becomes `file.hasTag("x")`, and `dateformat()` formats are translated to the common Bases ones (unusual tokens are reported as not convertible).
 
 The converted block is what Bases reads, so you can edit it after converting, and **Bases** shows the result right away in the note.
 

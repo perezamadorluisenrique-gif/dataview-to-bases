@@ -73,6 +73,7 @@ class Ctx {
   formulas: Record<string, string> = {};
   groupKey?: string;
   grouped = false;
+  inline = new Set<string>();
 
   fail(reason: string): string {
     if (!this.reasons.includes(reason)) this.reasons.push(reason);
@@ -93,6 +94,10 @@ const SIMPLE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const PRIMARY = new Set(['id', 'member', 'index', 'call', 'str', 'num', 'bool', 'null', 'list']);
 const PREC: Record<string, number> = { '||': 1, '&&': 2, '==': 3, '!=': 3, '<': 3, '>': 3, '<=': 3, '>=': 3, '+': 4, '-': 4, '*': 5, '/': 5, '%': 5 };
 const q = (s: string) => JSON.stringify(s);
+
+export function normalizeName(name: string): string {
+  return name.trim().toLowerCase().replace(/\s+/g, '-');
+}
 
 function noteRef(name: string): string {
   return SIMPLE.test(name) ? `note.${name}` : `note[${q(name)}]`;
@@ -154,6 +159,12 @@ function fieldFrom(root: string, path: string[], ctx: Ctx): string {
     ctx.warn('After GROUP BY, Bases lists every note under its group heading instead of one row per group');
     return fieldFrom(path[0], path.slice(1), ctx);
   }
+  if (ctx.inline.has(normalizeName(root))) {
+    ctx.warn(`"${root}" is an inline field (${root}:: …) in your vault, and Bases reads only properties in the frontmatter`);
+  }
+  if (!SIMPLE.test(root)) {
+    ctx.warn(`Dataview also matches "${root}" under other spellings (due-date for Due Date); Bases needs the property name exactly as written`);
+  }
   return noteRef(root) + path.map((p) => (SIMPLE.test(p) ? `.${p}` : `[${q(p)}]`)).join('');
 }
 
@@ -181,11 +192,6 @@ export function emitExpr(e: Expr, ctx: Ctx, top = true): string {
       return top ? s : `(${s})`;
     }
     case 'bin': {
-      if ((e.op === '==' || e.op === '!=') && (e.r.k === 'null' || e.l.k === 'null')) {
-        const other = e.r.k === 'null' ? e.l : e.r;
-        const s = `${wrap(other, emitExpr(other, ctx, false))}.isTruthy()`;
-        return e.op === '==' ? `!${s}` : s;
-      }
       const side = (child: Expr, right: boolean) => {
         const s = emitExpr(child, ctx, true);
         if (child.k !== 'bin') return s;
@@ -222,7 +228,11 @@ function emitCall(e: Extract<Expr, { k: 'call' }>, ctx: Ctx): string {
       if (a[1].k === 'str') return `file.hasTag(${q(a[1].v.replace(/^#/, ''))})`;
       return ctx.fail('contains(file.tags, …) with a value that is not a plain string');
     }
-    return `${recv(0)}.contains(${arg(1)})`;
+    const recvText = recv(0);
+    if (recvText.startsWith('note.') || recvText.startsWith('note[')) {
+      ctx.warn('On list properties, Dataview contains() also matches part of an item and Bases only matches whole items');
+    }
+    return `${recvText}.contains(${arg(1)})`;
   }
   if (fn === 'icontains' && a.length === 2) return `${recv(0)}.lower().contains(${wrap(a[1], emitExpr(a[1], ctx, false))}.lower())`;
   if (fn === 'econtains' && a.length === 2) return `${recv(0)}.contains(${arg(1)})`;
@@ -232,7 +242,8 @@ function emitCall(e: Extract<Expr, { k: 'call' }>, ctx: Ctx): string {
   if (fn === 'length' && a.length === 1) return `${recv(0)}.length`;
   if (fn === 'default' && a.length === 2) {
     const x = emitExpr(a[0], ctx);
-    return `if(${x}, ${x}, ${arg(1)})`;
+    // Dataview replaces only a missing value; `if(x, x, y)` would also replace 0, false and ""
+    return `if(${x} == null, ${arg(1)}, ${x})`;
   }
   if (fn === 'choice' && a.length === 3) return `if(${arg(0)}, ${arg(1)}, ${arg(2)})`;
   if (fn === 'number' && a.length === 1) return `number(${arg(0)})`;
@@ -321,7 +332,12 @@ function sourceFilter(s: Source, ctx: Ctx): Filter | undefined {
   }
 }
 
-export function convertQuery(src: string): Conversion {
+export interface ConvertOptions {
+  /** Names of inline fields (key:: value) found in the vault, normalised with normalizeName. */
+  inlineFields?: Set<string>;
+}
+
+export function convertQuery(src: string, opts: ConvertOptions = {}): Conversion {
   const base: Conversion = { type: 'UNKNOWN', status: 'none', reasons: [], warnings: [] };
   let query: Query;
   try {
@@ -335,6 +351,8 @@ export function convertQuery(src: string): Conversion {
   if (query.type === 'CALENDAR') return { ...base, reasons: ['CALENDAR queries have no equivalent in Bases'] };
 
   const ctx = new Ctx();
+  if (opts.inlineFields) ctx.inline = opts.inlineFields;
+  if (query.limitFirst) ctx.warn('LIMIT comes before SORT or WHERE in the query: Dataview limits first, Bases always filters, sorts, then limits');
   if (query.flatten.length) ctx.fail(`FLATTEN ${query.flatten[0]} has no equivalent in Bases`);
   if (query.groupBy) {
     ctx.grouped = true;

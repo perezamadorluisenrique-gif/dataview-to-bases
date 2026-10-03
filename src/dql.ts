@@ -45,6 +45,8 @@ export interface Query {
   limit?: Expr;
   groupBy?: { expr: Expr; alias?: string };
   flatten: string[];
+  /** A SORT or WHERE comes after LIMIT. */
+  limitFirst: boolean;
 }
 
 export class DqlError extends Error {}
@@ -107,7 +109,7 @@ export function tokenize(src: string): Tok[] {
       while (j < n) {
         if (/[\p{L}\p{N}_]/u.test(src[j])) j++;
         // a hyphen between letters belongs to the name (due-date); "a - b" does not
-        else if (src[j] === '-' && /[\p{L}_]/u.test(src[j + 1] ?? '')) j++;
+        else if (src[j] === '-' && /[\p{L}\p{N}_]/u.test(src[j + 1] ?? '')) j++;
         else break;
       }
       out.push({ t: 'id', v: src.slice(i, j), s: i, e: j });
@@ -324,7 +326,7 @@ class Parser {
 
   query(): Query {
     const head = this.cur.v.toLowerCase();
-    const q: Query = { type: 'TABLE', withoutId: false, columns: [], where: [], sort: [], flatten: [] };
+    const q: Query = { type: 'TABLE', withoutId: false, columns: [], where: [], sort: [], flatten: [], limitFirst: false };
     if (head === 'task' || head === 'calendar') {
       q.type = head === 'task' ? 'TASK' : 'CALENDAR';
       return q;
@@ -340,9 +342,10 @@ class Parser {
       if (!(this.cur.t === 'id' && CLAUSES.has(kw))) throw new DqlError(`Unexpected "${this.cur.v}"`);
       this.i++;
       if (kw === 'from') q.from = this.srcOr();
-      else if (kw === 'where') q.where.push(this.expr());
+      else if (kw === 'where') { if (q.limit) q.limitFirst = true; q.where.push(this.expr()); }
       else if (kw === 'limit') q.limit = this.expr();
       else if (kw === 'sort') {
+        if (q.limit) q.limitFirst = true;
         for (;;) {
           const expr = this.expr();
           let dir: 'ASC' | 'DESC' = 'ASC';

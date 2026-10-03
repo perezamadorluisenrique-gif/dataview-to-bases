@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { buildReport, countInline, findBlocks, planEdits, scanText } from '../src/scan.ts';
+import { buildReport, countInline, findBlocks, inlineFieldNames, planEdits, scanText } from '../src/scan.ts';
 
 const NOTE = [
   '# Title',
@@ -95,4 +95,22 @@ test('scanText ignores notes without queries and builds the report', () => {
   assert.match(r, /\| \[\[n\.md\]\] \| 11 \| TASK \| not convertible \| TASK queries/);
   assert.match(r, /2 inline `=` queries/);
   assert.match(buildReport([], 4, 'x'), /No Dataview queries found/);
+});
+
+test('a quoted block is not closed by a fence outside the quote', () => {
+  const text = '> ```dataview\n> LIST FROM #a\n```\nafter\n```\n';
+  assert.deepEqual(findBlocks(text), []);
+});
+
+test('inlineFieldNames reads line, list and bracketed inline fields outside code', () => {
+  const text = [
+    'status:: done',
+    '- [ ] task [due:: 2026-10-10] and (Due Date:: x)',
+    '> owner:: me',
+    '```',
+    'hidden:: no',
+    '```',
+    'Plain text with http://example.com and a:b',
+  ].join('\n');
+  assert.deepEqual([...inlineFieldNames(text)].sort(), ['due', 'due-date', 'owner', 'status']);
 });
