@@ -2,6 +2,8 @@
 
 Convert Dataview queries into Bases blocks, and see which queries in your vault can be converted. A migration helper for people moving off Dataview, which has had no release in over a year, to the Bases core feature.
 
+![Before: a dataview TABLE query in a note. After: the same query converted to a Bases block that shows a table of four books with their ratings](https://raw.githubusercontent.com/perezamadorluisenrique-gif/dataview-to-bases/main/docs/convert.png)
+
 It converts the common queries (`TABLE`, `LIST`, `FROM`, `WHERE`, `SORT`, `LIMIT`, `GROUP BY`) and tells you plainly why it leaves the rest alone. It never converts anything on its own, and the vault scan never edits a note.
 
 ## Commands
