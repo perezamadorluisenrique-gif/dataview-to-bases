@@ -1,5 +1,5 @@
 import { Notice, Plugin, PluginSettingTab, Setting, TFile } from 'obsidian';
-import type { Editor } from 'obsidian';
+import type { Editor, SettingDefinitionItem } from 'obsidian';
 
 import { buildReport, inlineFieldNames, planEdits, scanText } from './src/scan.ts';
 import type { Edit, FileScan } from './src/scan.ts';
@@ -136,6 +136,18 @@ export default class DataviewToBases extends Plugin {
   }
 }
 
+/** Names and descriptions shared by the 1.13+ declarative tab and the older `display()`. */
+const TEXT = {
+  keepOriginal: {
+    name: 'Keep the original query',
+    desc: 'Leave the Dataview query under the new block, inside a comment that only shows while editing.',
+  },
+  reportPath: {
+    name: 'Report note',
+    desc: 'Where the vault scan writes its report. The note is replaced on every scan.',
+  },
+};
+
 class DataviewToBasesSettingTab extends PluginSettingTab {
   plugin: DataviewToBases;
 
@@ -144,32 +156,48 @@ class DataviewToBasesSettingTab extends PluginSettingTab {
     this.plugin = plugin;
   }
 
+  /**
+   * The settings, described rather than drawn. Obsidian 1.13 and later
+   * renders this itself and indexes it for the settings search. Older
+   * versions ignore it and call `display()`.
+   */
+  getSettingDefinitions(): SettingDefinitionItem[] {
+    return [
+      { ...TEXT.keepOriginal, control: { type: 'toggle', key: 'keepOriginal', defaultValue: DEFAULTS.keepOriginal } },
+      { ...TEXT.reportPath, control: { type: 'text', key: 'reportPath', placeholder: DEFAULTS.reportPath, defaultValue: DEFAULTS.reportPath } },
+    ];
+  }
+
+  getControlValue(key: string): unknown {
+    return (this.plugin.settings as unknown as Record<string, unknown>)[key];
+  }
+
+  async setControlValue(key: string, value: unknown): Promise<void> {
+    if (key === 'reportPath') {
+      const p = String(value).trim() || DEFAULTS.reportPath;
+      this.plugin.settings.reportPath = p.endsWith('.md') ? p : `${p}.md`;
+    } else Object.assign(this.plugin.settings, { [key]: value });
+    await this.plugin.saveSettings();
+  }
+
+  /** The pre-1.13 rendering, from the same text. Obsidian skips it once `getSettingDefinitions()` returns anything. */
   display(): void {
     const { containerEl } = this;
     containerEl.empty();
 
     new Setting(containerEl)
-      .setName('Keep the original query')
-      .setDesc('Leave the Dataview query under the new block, inside a comment that only shows while editing.')
-      .addToggle((t) =>
-        t.setValue(this.plugin.settings.keepOriginal).onChange(async (v) => {
-          this.plugin.settings.keepOriginal = v;
-          await this.plugin.saveSettings();
-        }),
-      );
+      .setName(TEXT.keepOriginal.name)
+      .setDesc(TEXT.keepOriginal.desc)
+      .addToggle((t) => t.setValue(this.plugin.settings.keepOriginal).onChange((v) => this.setControlValue('keepOriginal', v)));
 
     new Setting(containerEl)
-      .setName('Report note')
-      .setDesc('Where the vault scan writes its report. The note is replaced on every scan.')
+      .setName(TEXT.reportPath.name)
+      .setDesc(TEXT.reportPath.desc)
       .addText((t) =>
         t
           .setPlaceholder(DEFAULTS.reportPath)
           .setValue(this.plugin.settings.reportPath)
-          .onChange(async (v) => {
-            const p = v.trim() || DEFAULTS.reportPath;
-            this.plugin.settings.reportPath = p.endsWith('.md') ? p : `${p}.md`;
-            await this.plugin.saveSettings();
-          }),
+          .onChange((v) => this.setControlValue('reportPath', v)),
       );
   }
 }
