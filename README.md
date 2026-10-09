@@ -4,6 +4,8 @@ Convert Dataview queries into Bases blocks, and see which queries in your vault 
 
 ![Before: a dataview TABLE query in a note. After: the same query converted to a Bases block that shows a table of four books with their ratings](https://raw.githubusercontent.com/perezamadorluisenrique-gif/dataview-to-bases/main/docs/convert.png)
 
+It also moves Dataview inline fields (`status:: done`) into properties, so Bases can see them.
+
 It converts the common queries (`TABLE`, `LIST`, `FROM`, `WHERE`, `SORT`, `LIMIT`, `GROUP BY`) and tells you plainly why it leaves the rest alone. It never converts anything on its own, and the vault scan never edits a note.
 
 ## Commands
@@ -12,9 +14,25 @@ It converts the common queries (`TABLE`, `LIST`, `FROM`, `WHERE`, `SORT`, `LIMIT
 |---|---|
 | Convert Dataview query at cursor to Bases | Replaces the `dataview` block under the cursor with a `base` block. |
 | Convert all Dataview queries in this note | Converts every convertible query in the note and leaves the others as they are. |
-| Scan vault for Dataview queries | Writes a report note: for each note, each query and whether it is convertible, partly convertible or not, with the reasons. Edits nothing else. |
+| Scan vault for Dataview queries | Writes a report note: for each note, each query and whether it is convertible, partly convertible or not, with the reasons. Also lists the notes that have inline fields. Edits nothing else. |
+| Move inline fields to properties in this note | Copies the note's inline fields into its properties (and, by default, removes the field lines from the text). |
+| Move inline fields to properties in the vault… | Shows every note with inline fields and the property each would become. Tick the notes you want, then apply. |
+| Undo the last move of inline fields | Puts the notes from the last move back as they were. |
 
 Each conversion is one change in the editor, so a single **Undo** brings every query back. By default the original query stays under the new block inside a comment (hidden in reading view; its tags and links do not count for the note). Turn that off in the settings.
+
+## Moving inline fields to properties
+
+Bases reads only properties, so a query on `status:: done` written in the text shows nothing for that note. The move commands turn inline fields into properties:
+
+- A field on a line of its own (`status:: done`) and a field inside a sentence (`[due:: 2026-10-10]` or `(rating:: 4)`) are both found. Code blocks, inline code, math, comments and the front matter are skipped. A field in a list item or a quote is moved only when it is in brackets.
+- The key is kept as you wrote it when it is a valid property name (`Status`, `due_date`, `año`). Otherwise it is written the way Dataview reads it: lowercase, spaces as hyphens (`Due Date` becomes `due-date`).
+- Values get a type: numbers, `true` and `false`, dates and date-times (`2026-10-10`, `2026-10-10T09:30`) and links (`[[Some note]]`, kept as a link in the property). A value of several links separated by commas becomes a list. `tags`, `aliases` and `cssclasses` become lists. Anything else stays text, exactly as written.
+- A key that appears more than once in a note becomes one list property.
+- A property the note already has is never overwritten. If its value is different, the field is reported as a conflict and stays in the text; if it is the same, the field is just dropped. A field with no value is skipped.
+- With the setting **Remove the fields from the text** (on by default), fields on a line of their own are taken out of the text. Fields inside a sentence are prose, so they always stay and are only copied.
+
+The vault command shows a preview first: each note, the fields found, the property each becomes and the conflicts, with a checkbox per note. Nothing changes until you press the button. **Undo the last move of inline fields** puts back every note of the last move; a note you edited after the move is left as it is.
 
 ## Example
 
