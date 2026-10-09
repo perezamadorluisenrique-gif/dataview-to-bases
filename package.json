@@ -1,6 +1,6 @@
 {
   "name": "dataview-to-bases",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Dataview to Bases for Obsidian - Convert Dataview queries into Bases blocks, and report which queries in your vault can be converted.",
   "main": "main.js",
   "scripts": {

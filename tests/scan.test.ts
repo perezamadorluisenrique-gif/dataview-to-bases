@@ -114,3 +114,17 @@ test('inlineFieldNames reads line, list and bracketed inline fields outside code
   ].join('\n');
   assert.deepEqual([...inlineFieldNames(text)].sort(), ['due', 'due-date', 'owner', 'status']);
 });
+
+test('the report mentions notes with inline fields', () => {
+  assert.equal(scanText('a.md', 'no fields here'), undefined);
+  const s = scanText('f.md', 'status:: done\nprose [due:: 2026-10-10]');
+  assert.ok(s);
+  assert.equal(s.fields, 2);
+  assert.equal(s.entries.length, 0);
+  const r = buildReport([s], 3, '2026-10-09');
+  assert.match(r, /1 note has inline fields/);
+  assert.match(r, /## Notes with inline fields/);
+  assert.match(r, /\| \[\[f\.md\]\] \| 2 \|/);
+  assert.match(r, /Move inline fields to properties in the vault/);
+  assert.doesNotMatch(r, /\| Note \| Line \|/);
+});

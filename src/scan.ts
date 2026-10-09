@@ -1,6 +1,7 @@
 // Finds Dataview blocks in note text, converts them, and builds the vault report. Pure: no `obsidian` import.
 import { convertQuery, normalizeName } from './convert.ts';
 import type { Conversion, ConvertOptions } from './convert.ts';
+import { parseFields } from './fields.ts';
 
 export interface Block {
   /** 0-based line of the opening fence. */
@@ -110,17 +111,21 @@ export interface FileScan {
   path: string;
   entries: Array<{ line: number; type: string; status: Conversion['status']; notes: string[] }>;
   inline: number;
+  /** Inline fields (`key:: value`) that could be moved into properties. */
+  fields: number;
 }
 
 export function scanText(path: string, text: string, opts?: ConvertOptions): FileScan | undefined {
-  if (!/dataview|`\$?=/i.test(text)) return undefined;
+  const hasFields = text.includes('::') && parseFields(text).fields.length;
+  if (!/dataview|`\$?=/i.test(text) && !hasFields) return undefined;
   const entries = findBlocks(text).map((b) => {
     const c = convertBlock(b, opts);
     return { line: b.start + 1, type: c.type, status: c.status, notes: c.status === 'none' ? c.reasons : c.warnings };
   });
   const inline = countInline(text);
-  if (!entries.length && !inline) return undefined;
-  return { path, entries, inline };
+  const fields = hasFields ? parseFields(text).fields.length : 0;
+  if (!entries.length && !inline && !fields) return undefined;
+  return { path, entries, inline, fields };
 }
 
 const LABEL: Record<Conversion['status'], string> = { full: 'convertible', partly: 'partly', none: 'not convertible' };
@@ -137,10 +142,22 @@ export function buildReport(scans: FileScan[], filesChecked: number, date: strin
     `- ${all.length} Dataview queries in ${scans.filter((s) => s.entries.length).length} notes`,
     `- ${count('full')} convertible, ${count('partly')} partly (converted with a difference), ${count('none')} not convertible`,
     `- ${inline} inline queries (\`=\` expressions), which Bases cannot replace`,
+  ];
+  const withFields = scans.filter((s) => s.fields);
+  if (withFields.length) {
+    out.push(`- ${withFields.length} ${withFields.length === 1 ? 'note has' : 'notes have'} inline fields (\`key:: value\`), which Bases cannot read`);
+  }
+  out.push(
     '',
     'To convert a query, open its note and run "Convert Dataview query at cursor to Bases" or "Convert all Dataview queries in this note".',
-  ];
+  );
+  if (withFields.length) out.push('To make inline fields visible to Bases, run "Move inline fields to properties in the vault…" (it shows what will change first and can be undone).');
   if (!scans.length) return out.concat('', 'No Dataview queries found.', '').join('\n');
+  if (withFields.length) {
+    out.push('', '## Notes with inline fields', '', '| Note | Fields |', '| --- | --- |');
+    for (const s of withFields) out.push(`| [[${s.path}]] | ${s.fields} |`);
+  }
+  if (!all.length && !inline) return out.concat('').join('\n');
   out.push('', '## Notes', '', '| Note | Line | Query | Result | Details |', '| --- | --- | --- | --- | --- |');
   for (const s of scans) {
     for (const e of s.entries) {
