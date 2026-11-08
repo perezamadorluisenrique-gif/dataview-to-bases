@@ -5,6 +5,7 @@ import { parseFields, planFields, removableSources, removeFieldLines, showValue 
 import type { Plan } from './src/fields.ts';
 import { buildReport, inlineFieldNames, planEdits, scanText } from './src/scan.ts';
 import type { Edit, FileScan } from './src/scan.ts';
+import { moreDefinitions, renderMore } from './src/more-link.ts';
 
 interface Settings {
   keepOriginal: boolean;
@@ -388,6 +389,7 @@ class DataviewToBasesSettingTab extends PluginSettingTab {
       { ...TEXT.keepOriginal, control: { type: 'toggle', key: 'keepOriginal', defaultValue: DEFAULTS.keepOriginal } },
       { ...TEXT.removeFields, control: { type: 'toggle', key: 'removeFields', defaultValue: DEFAULTS.removeFields } },
       { ...TEXT.reportPath, control: { type: 'text', key: 'reportPath', placeholder: DEFAULTS.reportPath, defaultValue: DEFAULTS.reportPath } },
+      ...(moreDefinitions() as SettingDefinitionItem[]),
     ];
   }
 
@@ -427,6 +429,7 @@ class DataviewToBasesSettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.reportPath)
           .onChange((v) => this.setControlValue('reportPath', v)),
       );
+    renderMore(this.containerEl, (el) => new Setting(el));
   }
 }
 
