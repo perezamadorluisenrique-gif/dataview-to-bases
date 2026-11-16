@@ -192,6 +192,14 @@ export function emitExpr(e: Expr, ctx: Ctx, top = true): string {
       return top ? s : `(${s})`;
     }
     case 'bin': {
+      if (['<', '<=', '>', '>='].includes(e.op)) {
+        const numL = e.l.k === 'num';
+        const numR = e.r.k === 'num';
+        const other = numL ? e.r : numR ? e.l : undefined;
+        if (other && other.k !== 'num' && other.k !== 'un') {
+          ctx.warn('A note without the property: Dataview counts an empty value as smaller than any number (so "x < 5" lists it), while Bases does not match it. Add a check for an empty value if you need that');
+        }
+      }
       const side = (child: Expr, right: boolean) => {
         const s = emitExpr(child, ctx, true);
         if (child.k !== 'bin') return s;
