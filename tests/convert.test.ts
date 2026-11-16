@@ -208,3 +208,13 @@ for (const [q, re] of NOT_CONVERTIBLE) {
     assert.match(c.reasons.join('; '), re);
   });
 }
+
+test('comparing a field with a number warns that empty values behave differently', () => {
+  const c = convertQuery('LIST FROM "A" WHERE rating < 5');
+  assert.equal(c.status, 'partly');
+  assert.ok(c.warnings.some((w) => w.includes('empty value')));
+  const d = convertQuery('LIST FROM "A" WHERE 3 > 2');
+  assert.ok(!d.warnings.some((w) => w.includes('empty value')));
+  const f = convertQuery('LIST FROM "A" WHERE file.size >= 100');
+  assert.ok(f.warnings.some((w) => w.includes('empty value')));
+});
