@@ -122,11 +122,18 @@ The converted block is what Bases reads, so you can edit it after converting, an
 |---|---|---|
 | Keep the original query | on | Leaves the query under the new block in a hidden comment. |
 | Report note | `Dataview to Bases report.md` | Where the vault scan writes its report. Replaced on every scan. |
+| Show Pro tips | on | A one-line tip about Dataview to Bases Pro in one place (see [Pro](#pro) below). Off hides it for good. |
 
 ## Notes
 
 - Needs a version of Obsidian with Bases (1.10 for the list view). The plugin only writes text; it does not need Dataview installed.
-- No network use, no data leaves your vault.
+- No network use, no data leaves your vault. The Pro tip (see [Pro](#pro)) is fixed text and sends nothing.
+
+## Pro
+
+[Dataview to Bases Pro](https://perezamadorluisenrique-gif.github.io/pro/dataview-to-bases/) is an optional paid companion (one-time payment) for moving a whole vault: it converts every note in one go with a preview and undo, runs each converted query in both Dataview and Bases and lists the ones that differ, fixes mixed property types, and writes a migration report. Everything described above stays free in this plugin, and this plugin never needs Pro.
+
+**Pro tips (static, inside this plugin only).** Dataview to Bases shows a one-line tip about Dataview to Bases Pro in one place: in the notice that **Convert Dataview query at cursor**, **Convert all Dataview queries in this note** and **Scan vault for Dataview queries** already show, and only when at least one query was left unconverted or converted only partly. It appears at most once every 14 days. The text is fixed and ships with the plugin: nothing is loaded from the internet, nothing is counted or sent, and **Learn more** only opens the Pro page in your browser. **Don't show again** on the tip, or the **Show Pro tips** setting, turns it off for good.
 
 ## Installation
 
@@ -166,9 +173,31 @@ In Obsidian, open **Settings → Community plugins → Browse** and search for "
 | [Book Studio](https://obsidian.md/plugins?id=book-studio) | Turn notes into a print-ready paperback PDF and an EPUB 3, entirely on your device. | [book-studio](https://github.com/perezamadorluisenrique-gif/book-studio) |
 | [Emoji Search](https://obsidian.md/plugins?id=emoji-search) | Insert emojis from a searchable picker or by typing a :shortcode. | [emoji-search](https://github.com/perezamadorluisenrique-gif/emoji-search) |
 | [Inline TOC](https://obsidian.md/plugins?id=inline-toc) | Show a live table of contents inside any note with a toc code block, or insert a plain Markdown one. | [inline-toc](https://github.com/perezamadorluisenrique-gif/inline-toc) |
+| [Run Code Blocks](https://obsidian.md/plugins?id=run-code-blocks) | Adds a Run button to code blocks and shows the output right below, for JavaScript, Python, shell and more. | [run-code-blocks](https://github.com/perezamadorluisenrique-gif/run-code-blocks) |
+| [Canvas Finder](https://obsidian.md/plugins?id=canvas-finder) | Fuzzy-search the cards and files on a canvas and jump straight to the match. | [canvas-finder](https://github.com/perezamadorluisenrique-gif/canvas-finder) |
+| [Folder Index Notes](https://obsidian.md/plugins?id=folder-index-notes) | Keeps an index note in each folder up to date with links to the notes and subfolders inside it. | [folder-index-notes](https://github.com/perezamadorluisenrique-gif/folder-index-notes) |
+| [Random Note Filters](https://obsidian.md/plugins?id=random-note-filters) | Open or link a random note from a folder, tag, property or the current search results. | [random-note-filters](https://github.com/perezamadorluisenrique-gif/random-note-filters) |
+| [Split by Heading](https://obsidian.md/plugins?id=split-by-heading) | Split a note into one note per heading, with links back in the source. | [split-by-heading](https://github.com/perezamadorluisenrique-gif/split-by-heading) |
 
 All of them are in the community directory: Settings -> Community plugins ->
 Browse, then search for the name. Demos and install links for every one:
 [the catalog](https://perezamadorluisenrique-gif.github.io/catalog/).
+
+### Pro and templates
+
+Optional paid extras, one-time payment. Everything in the free plugins stays free.
+
+- [Update Radar Pro](https://perezamadorluisenrique-gif.github.io/pro/update-radar/): A copy before every update, undo a whole update session, safe start after a broken update.
+- [Book Studio Pro](https://perezamadorluisenrique-gif.github.io/pro/book-studio/): Genre themes, a back-of-book index, box sets, several editions and a sales kit for Book Studio.
+- [Section Numbering Pro](https://perezamadorluisenrique-gif.github.io/pro/section-numbering/): Numbering profiles, cross-references, multi-note documents and Word export.
+- [Typography Pro](https://perezamadorluisenrique-gif.github.io/pro/typography/): Your own typography profiles and dialogue dashes for Typography as You Type.
+- [Text Case Pro](https://perezamadorluisenrique-gif.github.io/pro/text-case/): Vault-wide find and replace and per-folder recipes for Text Case.
+- [Dataview to Bases Pro](https://perezamadorluisenrique-gif.github.io/pro/dataview-to-bases/): Fixes property types and checks the values before you switch to Bases.
+- [KDP Book Vault](https://perezamadorluisenrique-gif.github.io/pro/kdp-book-vault/): A ready-made book vault for Book Studio, with two sample books.
+- [Thesis and Report Vault](https://perezamadorluisenrique-gif.github.io/pro/thesis-vault/): A thesis and report vault numbered with Section Numbering.
+- [Writer bundle](https://perezamadorluisenrique-gif.github.io/pro/bundles/writer/): Typography Pro and Text Case Pro together.
+- [Author bundle](https://perezamadorluisenrique-gif.github.io/pro/bundles/author/): Book Studio Pro, KDP Book Vault and Typography Pro together.
+- [Academic bundle](https://perezamadorluisenrique-gif.github.io/pro/bundles/academic/): Section Numbering Pro, the Thesis and Report Vault and Typography Pro together.
+- [All Obsidian bundle](https://perezamadorluisenrique-gif.github.io/pro/bundles/all-obsidian/): Every Obsidian Pro and template in one purchase.
 
 Follow new plugins and updates on X: [@luenpereza](https://x.com/luenpereza)

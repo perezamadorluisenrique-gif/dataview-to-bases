@@ -2,7 +2,10 @@
 import type { MorePick } from './more-link.ts';
 
 export const PICKS: readonly MorePick[] = [
+	{ id: "url-cards", name: "URL Cards", desc: "Show web addresses as cards." },
 	{ id: "vim-config", name: "Vim Config", desc: "Load a vimrc-style file from your vault." },
-	{ id: "spreadsheet-to-table", name: "Spreadsheet to Table", desc: "Paste Excel or Sheets cells as a Markdown table." },
 	{ id: "section-numbering", name: "Section Numbering", desc: "Number headings as an outline, links stay intact." },
 ];
+
+/** The "Pro and templates" row of the settings block, or null for none. */
+export const PRO_PAGE: string | null = 'https://perezamadorluisenrique-gif.github.io/pro/?ref=more-dataview-to-bases';
