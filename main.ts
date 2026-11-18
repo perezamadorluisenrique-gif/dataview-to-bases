@@ -6,8 +6,11 @@ import type { Plan } from './src/fields.ts';
 import { buildReport, inlineFieldNames, planEdits, scanText } from './src/scan.ts';
 import type { Edit, FileScan } from './src/scan.ts';
 import { moreDefinitions, renderMore } from './src/more-link.ts';
+import { HINT_DEFAULTS, cleanHintSettings, hintDue, hintUrl, hintsOff, markHintShown, renderHint } from './src/pro-hint.ts';
+import type { HintSettings } from './src/pro-hint.ts';
+import { leftSomeBehind } from './src/pro-tip.ts';
 
-interface Settings {
+interface Settings extends HintSettings {
   keepOriginal: boolean;
   reportPath: string;
   removeFields: boolean;
@@ -17,6 +20,8 @@ const DEFAULTS: Settings = {
   keepOriginal: true,
   reportPath: 'Dataview to Bases report.md',
   removeFields: true,
+  ...HINT_DEFAULTS,
+  proHintShown: {},
 };
 
 /** A note as it was before and right after the last move, so it can be put back. */
@@ -276,6 +281,38 @@ export default class DataviewToBases extends Plugin {
     return names;
   }
 
+  /**
+   * Shows the result notice the command already shows. When something was left unconverted or flagged, it may
+   * also carry one static Pro tip (fixed text, no network), at most once every 14 days. The conversion has no
+   * window of its own, so its notice is the only place the plugin shows a tip.
+   */
+  private result(message: string, ms: number, statuses: ReadonlyArray<'full' | 'partly' | 'none'>): void {
+    if (!leftSomeBehind(statuses) || !hintDue(this.settings, 'db-report')) {
+      new Notice(message, ms);
+      return;
+    }
+    Object.assign(this.settings, markHintShown(this.settings, 'db-report'));
+    void this.saveSettings();
+    const fragment = createFragment();
+    const box = fragment.createDiv();
+    box.createDiv({ text: message });
+    const notice = new Notice(fragment, Math.max(ms, 15000));
+    renderHint(
+      box,
+      {
+        line: 'Before you switch, Dataview to Bases Pro runs each converted query in both Dataview and Bases and lists the ones that differ, and fixes mixed property types.',
+        more: 'Learn more',
+        off: "Don't show again",
+      },
+      hintUrl('dataview-to-bases', 'db-report'),
+      async () => {
+        Object.assign(this.settings, hintsOff(this.settings));
+        await this.saveSettings();
+        notice.hide();
+      },
+    );
+  }
+
   private async convert(editor: Editor, atCursor: boolean) {
     const inlineFields = await this.inlineFields();
     // read the note after the wait, so what is converted is what is on screen
@@ -301,19 +338,21 @@ export default class DataviewToBases extends Plugin {
     const skipped = edits.filter((e) => e.lines === undefined);
     if (atCursor) {
       const only = edits[0];
-      new Notice(
+      this.result(
         only.lines
           ? `Converted to Bases.${only.conversion.warnings.length ? ' ' + only.conversion.warnings.join(' ') : ''}`
           : `Not converted: ${only.conversion.reasons.join('; ')}.`,
         only.lines ? 6000 : 10000,
+        [only.conversion.status],
       );
       return;
     }
     const first = skipped[0]?.conversion.reasons[0];
-    new Notice(
+    this.result(
       `Converted ${todo.length} of ${edits.length} queries.` +
         (skipped.length ? ` ${skipped.length} left unchanged (first reason: ${first}). Run the vault scan for details.` : ''),
       8000,
+      edits.map((e) => e.conversion.status),
     );
   }
 
@@ -340,12 +379,12 @@ export default class DataviewToBases extends Plugin {
       file = await this.app.vault.create(path, report);
     }
     await this.app.workspace.getLeaf(false).openFile(file);
-    new Notice(`Scanned ${files.length} notes. Report: ${path}`);
+    this.result(`Scanned ${files.length} notes. Report: ${path}`, 8000, scans.reduce<Array<'full' | 'partly' | 'none'>>((all, x) => all.concat(x.entries.map((e) => e.status)), []));
   }
 
   async loadSettings() {
     const { lastMove, ...rest } = ((await this.loadData()) ?? {}) as Partial<Settings> & { lastMove?: unknown };
-    this.settings = { ...DEFAULTS, ...rest };
+    this.settings = { ...DEFAULTS, ...rest, ...cleanHintSettings(rest) };
     this.lastMove = isLastMove(lastMove) ? lastMove : undefined;
   }
 
@@ -364,6 +403,10 @@ const TEXT = {
   removeFields: {
     name: 'Remove the fields from the text',
     desc: 'When moving inline fields to properties, take lines like "status:: done" out of the note. Fields inside a sentence, like [status:: done], always stay in the text and are only copied.',
+  },
+  proHints: {
+    name: 'Show Pro tips',
+    desc: 'Now and then, one line about Dataview to Bases Pro (paid) right where it would help, at most once every 14 days per place. Fixed text: no network, no tracking.',
   },
   reportPath: {
     name: 'Report note',
@@ -389,6 +432,7 @@ class DataviewToBasesSettingTab extends PluginSettingTab {
       { ...TEXT.keepOriginal, control: { type: 'toggle', key: 'keepOriginal', defaultValue: DEFAULTS.keepOriginal } },
       { ...TEXT.removeFields, control: { type: 'toggle', key: 'removeFields', defaultValue: DEFAULTS.removeFields } },
       { ...TEXT.reportPath, control: { type: 'text', key: 'reportPath', placeholder: DEFAULTS.reportPath, defaultValue: DEFAULTS.reportPath } },
+      { ...TEXT.proHints, control: { type: 'toggle', key: 'proHints', defaultValue: DEFAULTS.proHints } },
       ...(moreDefinitions() as SettingDefinitionItem[]),
     ];
   }
@@ -429,6 +473,11 @@ class DataviewToBasesSettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.reportPath)
           .onChange((v) => this.setControlValue('reportPath', v)),
       );
+    new Setting(containerEl)
+      .setName(TEXT.proHints.name)
+      .setDesc(TEXT.proHints.desc)
+      .addToggle((t) => t.setValue(this.plugin.settings.proHints).onChange((v) => this.setControlValue('proHints', v)));
+
     renderMore(this.containerEl, (el) => new Setting(el));
   }
 }
