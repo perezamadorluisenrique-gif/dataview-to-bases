@@ -72,7 +72,14 @@ views:
 
 - `TABLE` (with `AS` aliases and `WITHOUT ID`) becomes a table view; `LIST` becomes a list view.
 - `FROM` with folders, files, `#tags`, `[[links]]` (notes that link to it), `[[]]` (notes that link to this one), and `and`, `or`, `-`/`!` and parentheses.
-- `WHERE` with comparisons, `and`/`or`/`!`, `= null`, dates (`date(today)`, `dur(7 days)`) and the common functions: `contains`, `icontains`, `lower`, `length`, `default`, `choice`, `startswith`, `endswith`, `replace`, `split`, `join`, `round`, `floor`, `ceil`, `abs`, `min`, `max`, `dateformat`, `striptime`, `number`, `link` and a few more.
+- `WHERE` with comparisons, `and`/`or`/`!`, `= null` and dates (`date(today)`, `date(now)`, `dur(7 days)`, date plus or minus a duration).
+- Functions, in `WHERE`, in columns and in `SORT`:
+  - Text: `lower`, `replace`, `regextest`, `regexmatch`, `regexreplace`, `split`, `join`, `startswith`, `endswith`, `substring`, `truncate`, `padleft`, `padright`, `length`, `contains`, `icontains`, `string`.
+  - Numbers: `round`, `trunc`, `floor`, `ceil`, `abs`, `min`, `max`, `number`.
+  - Lists: `sum`, `average`, `min` and `max` of a list, `map`, `filter`, `any`, `all`, `none` (with a lambda such as `(h) => h > 8`, or without one), `nonnull`, `contains`, `econtains`, `reverse`, `sort`, `unique`, `flat`, `slice`, `length`.
+  - Others: `typeof(x) = "number"` (any Dataview type name), `choice`, `default`, `date`, `dur`, `dateformat`, `striptime`, `link`.
+- A regular expression in `regextest`, `regexmatch`, `regexreplace` or `split` must be written in the query (`regexmatch("\d{4}", year)`), because Bases needs it as a `/…/` pattern.
+- `sum`, `min` and `max` of a list need Obsidian 1.11 or newer; on an older version those queries are reported as not convertible.
 - `SORT` with several keys, `LIMIT` with a number, `GROUP BY` one field.
 - `file.name`, `file.link`, `file.path`, `file.folder`, `file.ext`, `file.size`, `file.ctime`, `file.mtime`, `file.cday`, `file.mday`, `file.tags`, `file.outlinks`, `file.inlinks` and `this.file.*`.
 - Columns that are not plain properties become formulas, named after what they were.
@@ -83,20 +90,29 @@ Left unchanged, with the reason in the notice or the report:
 
 - `TASK` and `CALENDAR` queries, `dataviewjs` blocks and inline `= …` queries.
 - `FLATTEN`, and `FROM outgoing(…)` or `csv(…)` sources.
-- Functions Bases has no equivalent for, such as `upper`, `sum`, `regexmatch`, `map` and `filter`; `file.tasks`, `file.lists`, `file.day`, `file.starred`.
+- Functions Bases has no equivalent for: `upper` (Bases has `lower` and `title`, but no upper case), `product`, `containsword`, `extract`, `object`, `minby`, `maxby`, `firstvalue`, `display`, `elink`, `embed`, `meta`, `hash`, `localtime`, `durationformat` and `currencyformat`; `file.tasks`, `file.lists`, `file.day`, `file.starred`.
+- `typeof()` used for anything but a comparison with a type name, a lambda that reads a field of a list item (`(p) => p.file.name`) or the item of an outer lambda, `sort()` with a key, and `sum`, `length`, `map` and the like over the `rows` of a `GROUP BY`.
+- `truncate`, `padleft` and `padright` with a length that is not a number written in the query, and a regular expression that is not written in the query.
 
 ## Differences you should check
 
 A query is reported as **partly** convertible when the result may not match Dataview. The notice and the report say which of these applies:
 
 - **Inline fields.** Bases reads only properties in the frontmatter. If a field the query uses is written inline somewhere in your vault (`status:: done`, `[due:: 2026-10-10]`), the query is reported as partly, because the converted table would be empty or wrong for those notes. Move the field into the frontmatter, or keep Dataview for that query.
-- **`contains()` on a property.** On a list property, Dataview also matches part of an item (`contains(authors, "Smi")` finds "Smith"), while Bases matches whole items only. `econtains` converts exactly.
+- **`contains()` on a property.** On a list property, Dataview also matches part of an item (`contains(authors, "Smi")` finds "Smith"), while Bases matches whole items only.
+- **`contains()` on text.** Dataview tells upper and lower case apart; Bases does not (`contains(file.name, "Ann")` also finds "ANNA"). `econtains` matches whole list items in both, but on text it has the same difference. Text with no letters, such as `"2026"`, converts exactly.
+- **`sum`, `average`, `min` and `max` of a list.** Bases counts only the numbers in the list (Dataview also adds up text and durations and compares dates), and gives nothing for a single value that is not a list. A list of numbers written in the query converts exactly.
+- **`any`, `all` and `none` on a property.** For a note without the list, Dataview can still answer true or false; Bases leaves the note out.
+- **`min(a, b)` and `max(a, b)` with a property.** When one of the values is missing, Dataview uses the others and Bases shows nothing.
+- **`round(x, 2)`.** For a negative number exactly halfway, Dataview rounds away from zero (`-1.25` to `-1.3`) and Bases toward it (`-1.2`). `round(x)` converts exactly.
+- **`substring()`** with positions that are computed, negative or reversed: Bases uses `slice()`, which counts negative positions from the end and does not swap them.
+- **`split()`** with a separator that is not written in the query (Dataview reads it as a regular expression, Bases as plain text), or with a group `(…)` in the pattern.
 - **`GROUP BY`.** Dataview shows one row per group; Bases lists every note under its group heading.
 - **`this.field`.** Properties of the current page are mapped to `this.note.field`; check the result.
 - **Property spelling.** Dataview matches `Due Date` as `due-date`. Bases uses the property name exactly as written in the query, so names with a hyphen or a space are reported as partly and converted to a formula that reads the name as written.
 - **Clause order.** Dataview runs `LIMIT` where you wrote it (`LIMIT 10 SORT x` sorts only ten notes); Bases always filters, sorts, then limits.
 
-Translated without a warning: `x = null` stays `x == null` (so `0`, `false` and an empty text are values, as in Dataview), `default(x, y)` only replaces a missing value, `contains(file.tags, "#x")` becomes `file.hasTag("x")`, and `dateformat()` formats are translated to the common Bases ones (unusual tokens are reported as not convertible).
+Translated without a warning: `x = null` stays `x == null` (so `0`, `false` and an empty text are values, as in Dataview), `!x` becomes `!x.isTruthy()` (Bases would otherwise leave out the notes without `x`, which Dataview lists), `length(x)` gives 0 for a missing `x` as in Dataview, `regexmatch()` must match the whole text unless the pattern starts with `^` or ends with `$`, `truncate`, `padleft`, `padright` and `trunc` are spelled out with `slice`, `repeat`, `ceil` and `floor`, `typeof(x) = "string"` leaves out links (Bases counts a link as text), a function of a missing value stays empty, `default(x, y)` only replaces a missing value, `contains(file.tags, "#x")` becomes `file.hasTag("x")`, and `dateformat()` formats are translated to the common Bases ones (unusual tokens are reported as not convertible).
 
 The converted block is what Bases reads, so you can edit it after converting, and **Bases** shows the result right away in the note.
 

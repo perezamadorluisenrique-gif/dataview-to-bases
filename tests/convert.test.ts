@@ -100,7 +100,7 @@ test('functions map to Bases methods', () => {
   assert.match(y, /file\.links\.length/);
   assert.match(y, /note\.title\.lower\(\)/);
   assert.match(y, /if\(note\.done, "y", "n"\)/);
-  assert.match(y, /note\.title\.lower\(\)\.contains\("a"\.lower\(\)\) && !note\.done/);
+  assert.match(y, /note\.title\.lower\(\)\.contains\("a"\.lower\(\)\) && !note\.done\.isTruthy\(\)/);
 });
 
 test('dates: today, now, durations, dateformat', () => {
@@ -127,7 +127,11 @@ test('contains() on a note property warns about list matching; on file.tags it d
   assert.equal(c.status, 'partly');
   assert.match(c.warnings.join(' '), /whole items/);
   assert.equal(convertQuery('LIST FROM #x WHERE contains(file.tags, "#a")').status, 'full');
-  assert.equal(convertQuery('LIST FROM #x WHERE econtains(authors, "Smith")').status, 'full');
+  // econtains matches whole list items in both; on text Bases ignores case
+  assert.deepEqual(convertQuery('LIST FROM #x WHERE econtains(authors, "Smith")').warnings, [
+    'On text, Dataview contains() tells upper and lower case apart and Bases contains() does not ("Ann" also finds "ANNA")',
+  ]);
+  assert.equal(convertQuery('LIST FROM #x WHERE econtains(ids, 42)').status, 'full');
 });
 
 test('fields that exist only as inline fields in the vault are flagged', () => {
@@ -188,7 +192,8 @@ const NOT_CONVERTIBLE: Array<[string, RegExp]> = [
   ['TABLE a FROM #x FLATTEN tags', /FLATTEN/],
   ['TABLE upper(a) FROM #x', /upper\(\)/],
   ['TABLE sum(rows.a) FROM #x GROUP BY b', /sum\(\)/],
-  ['TABLE regexmatch("a", b) FROM #x', /regexmatch/],
+  ['TABLE regexmatch(pat, b) FROM #x', /regexmatch\(\) with a pattern that is not written/],
+  ['TABLE regextest("a(", b) FROM #x', /not a valid regular expression/],
   ['LIST FROM outgoing([[A]])', /outgoing/],
   ['LIST FROM csv("a.csv")', /csv/],
   ['TABLE length(rows) FROM #x GROUP BY b', /rows/],
@@ -198,7 +203,7 @@ const NOT_CONVERTIBLE: Array<[string, RegExp]> = [
   ['TABLE foo(a) FROM #x', /foo\(\)/],
   ['TABLE a FROM', /could not read/],
   ['SELECT * FROM x', /starts with/],
-  ['TABLE map(a, (x) => x) FROM #x', /could not read/],
+  ['TABLE map(a, x => x) FROM #x', /could not read/],
 ];
 for (const [q, re] of NOT_CONVERTIBLE) {
   test(`not convertible: ${q}`, () => {
@@ -215,6 +220,10 @@ test('comparing a field with a number warns that empty values behave differently
   assert.ok(c.warnings.some((w) => w.includes('empty value')));
   const d = convertQuery('LIST FROM "A" WHERE 3 > 2');
   assert.ok(!d.warnings.some((w) => w.includes('empty value')));
-  const f = convertQuery('LIST FROM "A" WHERE file.size >= 100');
-  assert.ok(f.warnings.some((w) => w.includes('empty value')));
+  assert.ok(convertQuery('LIST FROM "A" WHERE 5 >= rating').warnings.some((w) => w.includes('empty value')));
+  // "x > 5" leaves a note without x out in both
+  assert.equal(convertQuery('LIST FROM "A" WHERE rating >= 4').status, 'full');
+  assert.equal(convertQuery('LIST FROM "A" WHERE 4 < rating').status, 'full');
+  // file fields always have a value
+  assert.equal(convertQuery('LIST FROM "A" WHERE file.size < 100').status, 'full');
 });
