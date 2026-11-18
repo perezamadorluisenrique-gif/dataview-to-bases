@@ -1,4 +1,4 @@
-import { MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting, TFile } from 'obsidian';
+import { apiVersion, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting, TFile } from 'obsidian';
 import type { App, Editor, MarkdownFileInfo, SettingDefinitionItem } from 'obsidian';
 
 import { parseFields, planFields, removableSources, removeFieldLines, showValue } from './src/fields.ts';
@@ -281,7 +281,7 @@ export default class DataviewToBases extends Plugin {
     // read the note after the wait, so what is converted is what is on screen
     const text = editor.getValue();
     const cursor = editor.getCursor('from').line;
-    const edits = planEdits(text, this.settings.keepOriginal, atCursor ? (b) => cursor >= b.start && cursor <= b.end : undefined, { inlineFields });
+    const edits = planEdits(text, this.settings.keepOriginal, atCursor ? (b) => cursor >= b.start && cursor <= b.end : undefined, { inlineFields, appVersion: apiVersion });
     if (!edits.length) {
       new Notice(atCursor ? 'The cursor is not inside a Dataview query.' : 'No Dataview queries in this note.');
       return;
@@ -323,7 +323,7 @@ export default class DataviewToBases extends Plugin {
     const inlineFields = await this.inlineFields();
     for (const f of files) {
       const text = await this.app.vault.cachedRead(f);
-      const s = scanText(f.path, text, { inlineFields });
+      const s = scanText(f.path, text, { inlineFields, appVersion: apiVersion });
       if (s) scans.push(s);
     }
     scans.sort((a, b) => a.path.localeCompare(b.path));

@@ -14,7 +14,8 @@ export type Expr =
   | { k: 'call'; fn: string; args: Expr[] }
   | { k: 'bin'; op: string; l: Expr; r: Expr }
   | { k: 'un'; op: string; e: Expr }
-  | { k: 'list'; items: Expr[] };
+  | { k: 'list'; items: Expr[] }
+  | { k: 'lambda'; params: string[]; body: Expr };
 
 export type Source =
   | { k: 'folder'; v: string }
@@ -77,7 +78,8 @@ export function tokenize(src: string): Tok[] {
       let j = i + 1;
       let v = '';
       while (j < n && src[j] !== '"') {
-        if (src[j] === '\\' && j + 1 < n) { v += src[j + 1]; j += 2; } else v += src[j++];
+        // as in Dataview: \" and \\ give the character, any other escape keeps its backslash ("\d" stays \d)
+        if (src[j] === '\\' && j + 1 < n) { v += src[j + 1] === '"' || src[j + 1] === '\\' ? src[j + 1] : src.slice(j, j + 2); j += 2; } else v += src[j++];
       }
       if (j >= n) throw new DqlError('Unterminated string');
       out.push({ t: 'str', v, s: i, e: j + 1 });
@@ -146,7 +148,13 @@ class Parser {
   get cur(): Tok { return this.toks[this.i]; }
   isKw(w: string, t: Tok = this.cur): boolean { return t.t === 'id' && t.v.toLowerCase() === w; }
   isOp(v: string): boolean { return this.cur.t === 'op' && this.cur.v === v; }
-  atClause(): boolean { return this.cur.t === 'end' || (this.cur.t === 'id' && CLAUSES.has(this.cur.v.toLowerCase())); }
+  atClause(): boolean {
+    if (this.cur.t === 'end') return true;
+    if (this.cur.t !== 'id' || !CLAUSES.has(this.cur.v.toLowerCase())) return false;
+    // sort(list) is also a function, and a column may start with it
+    const next = this.toks[this.i + 1];
+    return !(this.cur.v.toLowerCase() === 'sort' && next?.t === 'op' && next.v === '(');
+  }
   expectOp(v: string): void {
     if (!this.isOp(v)) throw new DqlError(`Expected "${v}"`);
     this.i++;
@@ -216,6 +224,22 @@ class Parser {
     }
     return e;
   }
+  /** `(x, y) =>`: Dataview's lambda head. Moves past it and returns the names, or leaves the position alone. */
+  lambdaParams(): string[] | undefined {
+    const names: string[] = [];
+    let j = this.i + 1;
+    while (this.toks[j]?.t === 'id') {
+      names.push(this.toks[j].v);
+      j++;
+      if (this.toks[j]?.t === 'op' && this.toks[j].v === ',') j++;
+      else break;
+    }
+    const close = this.toks[j];
+    const arrow = this.toks[j + 1];
+    if (close?.t !== 'op' || close.v !== ')' || arrow?.t !== 'op' || arrow.v !== '=>') return undefined;
+    this.i = j + 2;
+    return names;
+  }
   primary(): Expr {
     const t = this.cur;
     if (t.t === 'num') { this.i++; return { k: 'num', v: Number(t.v) }; }
@@ -224,6 +248,8 @@ class Parser {
     if (t.t === 'tag') { this.i++; return { k: 'tag', v: t.v }; }
     if (t.t === 'link') { this.i++; return { k: 'link', v: t.v }; }
     if (t.t === 'op' && t.v === '(') {
+      const lambda = this.lambdaParams();
+      if (lambda) return { k: 'lambda', params: lambda, body: this.expr() };
       this.i++;
       const e = this.expr();
       this.expectOp(')');
